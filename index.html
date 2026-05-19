@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LumenIQ Portal — Inteligência de Mercado COSIP & Smart Cities</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  .fade-in { animation: fadeIn 0.25s ease-in; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .score-ring { transition: stroke-dashoffset 0.6s ease; }
+  [data-route] { cursor: pointer; }
+  .badge { display: inline-flex; align-items: center; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+  .kpi-card:hover { transform: translateY(-2px); transition: transform 0.15s ease; }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+<div id="app"></div>
+
+<!-- Base completa IBGE (5.570 municípios) - opcional, gerado por `python coletor.py --baixar-base` -->
+<script src="municipios_base.js" onerror="console.log('municipios_base.js não encontrado - usando lista padrão de 56 municípios')"></script>
+
+<!-- Dados reais financeiros (SICONFI) - opcional, gerado por `python coletor.py` -->
+<script src="dados_municipios.js" onerror="console.log('dados_municipios.js não encontrado - usando apenas heurística')"></script>
+
+<script>
+/* =========================================================
+   DADOS MOCKADOS — 55 municípios brasileiros
+   ========================================================= */
+
+// Formato: [ibge, nome, uf, regiao, populacao, pib_per_capita]
+const MUNICIPIOS_BASE = [
+  [3550308,'São Paulo','SP','Sudeste',11451999,65000],
+  [3304557,'Rio de Janeiro','RJ','Sudeste',6211423,52000],
+  [5300108,'Brasília','DF','Centro-Oeste',2817068,89000],
+  [2927408,'Salvador','BA','Nordeste',2418005,28000],
+  [2304400,'Fortaleza','CE','Nordeste',2428708,29000],
+  [3106200,'Belo Horizonte','MG','Sudeste',2315560,42000],
+  [1302603,'Manaus','AM','Norte',2063689,32000],
+  [4106902,'Curitiba','PR','Sul',1773733,55000],
+  [2611606,'Recife','PE','Nordeste',1488920,33000],
+  [5208707,'Goiânia','GO','Centro-Oeste',1437366,38000],
+  [1501402,'Belém','PA','Norte',1303403,22000],
+  [4314902,'Porto Alegre','RS','Sul',1332570,48000],
+  [3518800,'Guarulhos','SP','Sudeste',1291784,38000],
+  [3509502,'Campinas','SP','Sudeste',1138309,52000],
+  [2111300,'São Luís','MA','Nordeste',1037241,24000],
+  [3304904,'São Gonçalo','RJ','Sudeste',896744,18000],
+  [2704302,'Maceió','AL','Nordeste',957916,22000],
+  [3301702,'Duque de Caxias','RJ','Sudeste',897806,42000],
+  [2408102,'Natal','RN','Nordeste',751300,27000],
+  [2211001,'Teresina','PI','Nordeste',868075,22000],
+  [5002704,'Campo Grande','MS','Centro-Oeste',897938,38000],
+  [3548708,'São Bernardo do Campo','SP','Sudeste',810979,45000],
+  [2507507,'João Pessoa','PB','Nordeste',817511,25000],
+  [3547809,'Santo André','SP','Sudeste',721368,38000],
+  [3534401,'Osasco','SP','Sudeste',699944,55000],
+  [2607901,'Jaboatão dos Guararapes','PE','Nordeste',706867,21000],
+  [3543402,'Ribeirão Preto','SP','Sudeste',698418,52000],
+  [3170206,'Uberlândia','MG','Sudeste',706597,42000],
+  [3118601,'Contagem','MG','Sudeste',668949,38000],
+  [3552205,'Sorocaba','SP','Sudeste',687357,44000],
+  [2800308,'Aracaju','SE','Nordeste',665299,28000],
+  [2910800,'Feira de Santana','BA','Nordeste',616272,18000],
+  [5103403,'Cuiabá','MT','Centro-Oeste',650877,42000],
+  [4209102,'Joinville','SC','Sul',597658,50000],
+  [3136702,'Juiz de Fora','MG','Sudeste',577107,30000],
+  [4113700,'Londrina','PR','Sul',575377,35000],
+  [5201405,'Aparecida de Goiânia','GO','Centro-Oeste',590146,22000],
+  [3303302,'Niterói','RJ','Sudeste',515317,68000],
+  [1500800,'Ananindeua','PA','Norte',525566,17000],
+  [1100205,'Porto Velho','RO','Norte',460434,28000],
+  [3205002,'Serra','ES','Sudeste',527230,42000],
+  [4305108,'Caxias do Sul','RS','Sul',517451,52000],
+  [3205200,'Vila Velha','ES','Sudeste',501325,32000],
+  [4205407,'Florianópolis','SC','Sul',516524,45000],
+  [1600303,'Macapá','AP','Norte',512902,22000],
+  [3529401,'Mauá','SP','Sudeste',427224,30000],
+  [3549805,'São José do Rio Preto','SP','Sudeste',469173,46000],
+  [3530607,'Mogi das Cruzes','SP','Sudeste',456973,38000],
+  [3513801,'Diadema','SP','Sudeste',429550,28000],
+  [3106705,'Betim','MG','Sudeste',439340,68000],
+  [3301009,'Campos dos Goytacazes','RJ','Sudeste',490288,55000],
+  [2609600,'Olinda','PE','Nordeste',392482,16000],
+  [3509601,'Carapicuíba','SP','Sudeste',397415,18000],
+  [3538709,'Piracicaba','SP','Sudeste',410275,45000],
+  [3201308,'Cariacica','ES','Sudeste',389004,22000],
+  [3514502,'Dracena','SP','Sudeste',47500,30000],
+];
+
+const MODELOS = ['Operação Direta','PPP','Concessão Administrativa','Locação de Ativos','ESCO','Prestação de Serviços','Consórcio Regional'];
+const OPERADORAS = ['CEEE','Selectra Engenharia','Citeluz','FM Rodrigues','EnGIE Soluções','Konkero Energia','BR Luz','Cymi Brasil','Schreder Brasil','Operação Direta Municipal','Light Serviços','Voltz Energia'];
+const PROGRAMAS_POOL = ['PROCEL RELUZ','FINISA Caixa','Avançar Cidades','BNDES FINEM','BID','Novo PAC','PROEDUC','Programa Estadual'];
+const CAPAGS = ['A','B','C','D'];
+
+function seedRandom(seed){ let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
+
+// Dados reais opcionalmente carregados via dados_municipios.js (gerado pelo coletor Python)
+const DADOS_REAIS = (typeof window !== 'undefined' && window.DADOS_MUNICIPIOS_REAIS) || {};
+
+// Se o coletor gerou municipios_base.js com a base completa do IBGE (5.570 cidades), usa essa.
+// Senão, usa a lista padrão de 56 cidades hardcoded.
+const BASE_ATIVA = (typeof window !== 'undefined' && Array.isArray(window.MUNICIPIOS_BASE_COMPLETO) && window.MUNICIPIOS_BASE_COMPLETO.length > 0)
+  ? window.MUNICIPIOS_BASE_COMPLETO
+  : MUNICIPIOS_BASE;
+
+const MUNICIPIOS = BASE_ATIVA.map((m, i) => {
+  const rng = seedRandom(i * 7 + 13);
+  const [ibgeCode, nome, uf, regiao, populacaoEst, pibpc] = m;
+  const real = DADOS_REAIS[String(ibgeCode)] || {};
+  const _fontes = {};
+  const populacao = real.populacao || populacaoEst;
+  if (real.populacao) _fontes.populacao = real.populacao_fonte || 'IBGE';
+  const cosipPerCapita = 30 + rng() * 70;
+  const cosipEstimado = Math.round(populacao * cosipPerCapita);
+  const cosipReal = real.cosip_anual;
+  const cosip = (cosipReal != null) ? cosipReal : cosipEstimado;
+  if (cosipReal != null) _fontes.cosip_anual = real.cosip_anual_fonte || 'SICONFI';
+  const cosipHistorico = real.cosip_historico || null;
+  const cosipAnoRef = real.cosip_anual_ano || null;
+  const cosipCrescimentoReal = typeof real.cosip_crescimento_anual === 'number' ? real.cosip_crescimento_anual : null;
+
+  // Status de coleta (vital pra UX honesta):
+  //   "real"          - foi coletado e SICONFI tem dado
+  //   "sem_publicado" - foi coletado mas SICONFI nao declarou COSIP (municipio pode nao arrecadar)
+  //   "erro_coleta"   - foi coletado mas houve falha tecnica
+  //   "sem_coleta"    - municipio nao esta na lista alvo - dados sao 100% estimativa
+  let cosipStatus;
+  if (Object.keys(real).length === 0) {
+    cosipStatus = 'sem_coleta';
+  } else if (real.cosip_status) {
+    cosipStatus = real.cosip_status;
+  } else if (cosipReal != null) {
+    cosipStatus = 'real';
+  } else {
+    cosipStatus = 'sem_coleta';
+  }
+  const crescCosip = -2 + rng() * 14;
+  const inadimplencia = 3 + rng() * 18;
+  const despesaEnergia = Math.round(cosip * (0.55 + rng() * 0.45));
+  const pontos = Math.round(populacao * (0.028 + rng() * 0.025));
+  const pctLed = Math.round(rng() * 95);
+  const idadeParque = Math.round(4 + rng() * 16);
+  const telegestao = rng() > 0.65;
+  const capag = CAPAGS[Math.min(3, Math.floor(rng() * 4))];
+  const modelo = MODELOS[Math.floor(rng() * MODELOS.length)];
+  const operadora = modelo === 'Operação Direta' ? 'Prefeitura Municipal' : OPERADORAS[Math.floor(rng() * OPERADORAS.length)];
+  const anoVenc = 2026 + Math.floor(rng() * 8);
+  const mesVenc = 1 + Math.floor(rng() * 12);
+  const consorcio = rng() > 0.7;
+  const programas = PROGRAMAS_POOL.filter(() => rng() > 0.78);
+  const potenciaMedia = 80 + Math.round(rng() * 120);
+
+  // Scoring
+  const scoreFinanceira = Math.round(({'A':85,'B':70,'C':50,'D':32}[capag]) + (rng() * 12 - 6));
+  const scoreModernizacao = Math.round(Math.max(15, Math.min(95, 100 - pctLed + (idadeParque * 1.2) + (rng() * 10))));
+  const scoreRisco = Math.round(Math.max(20, 100 - inadimplencia * 2 + (rng() * 8)));
+  const scorePPP = Math.round(Math.max(20, Math.min(95, (populacao / 30000) + scoreFinanceira * 0.5 + (cosipPerCapita / 2))));
+  const scoreESCO = Math.round(Math.min(95, (cosipPerCapita * 0.7) + (scoreModernizacao * 0.4) + (rng() * 8)));
+  const scoreSmart = Math.round(Math.min(95, (telegestao ? 25 : 0) + (consorcio ? 12 : 0) + (programas.length * 8) + (pctLed * 0.4) + (rng() * 12)));
+  const scoreAtratividade = Math.round((scoreFinanceira * 0.3 + scoreModernizacao * 0.35 + scoreRisco * 0.2 + Math.min(populacao / 25000, 95) * 0.15));
+  const scoreGeral = Math.round((scoreAtratividade + scoreFinanceira + scoreModernizacao + scoreRisco + scorePPP + scoreESCO + scoreSmart) / 7);
+
+  return {
+    id: i + 1,
+    ibge: '3' + String(550308 + i * 137).padStart(6,'0'),
+    nome, uf, regiao, populacao,
+    pib_per_capita: pibpc,
+    cosip_anual: cosip,
+    cosip_anual_ano: cosipAnoRef,
+    cosip_historico: cosipHistorico,
+    cosip_status: cosipStatus,
+    cosip_estimado: cosipEstimado,
+    cosip_crescimento: cosipCrescimentoReal !== null ? cosipCrescimentoReal : +crescCosip.toFixed(1),
+    cosip_crescimento_fonte: cosipCrescimentoReal !== null ? 'CAGR SICONFI' : 'estimado',
+    _fontes,
+    inadimplencia: +inadimplencia.toFixed(1),
+    despesa_energia: despesaEnergia,
+    total_pontos: pontos,
+    pct_led: pctLed,
+    idade_parque: idadeParque,
+    potencia_media: potenciaMedia,
+    telegestao,
+    capag,
+    modelo_op: modelo,
+    operadora,
+    contrato_vence: `${anoVenc}-${String(mesVenc).padStart(2,'0')}-15`,
+    consorcio,
+    programas,
+    scores: {
+      geral: scoreGeral,
+      atratividade: scoreAtratividade,
+      modernizacao: scoreModernizacao,
+      financeira: Math.max(0, Math.min(100, scoreFinanceira)),
+      risco: Math.max(0, Math.min(100, scoreRisco)),
+      ppp: Math.max(0, Math.min(100, scorePPP)),
+      esco: Math.max(0, Math.min(100, scoreESCO)),
+      smartcity: Math.max(0, Math.min(100, scoreSmart))
+    }
+  };
+});
+
+/* =========================================================
+   ESTADO E ROTEAMENTO
+   ========================================================= */
+
+const state = {
+  route: 'dashboard',
+  routeParam: null,
+  filters: { uf: '', capag: '', modelo: '', popMin: 0, ledMax: 100, scoreMin: 0, search: '', cosipStatus: '' },
+  comparador: [],
+  sortBy: 'scoreGeral',
+  page: 0,
+  pageSize: 50,
+};
+
+function navigate(route, param = null) {
+  state.route = route;
+  state.routeParam = param;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+window.navigate = navigate;
+
+function toggleComparador(id) {
+  const idx = state.comparador.indexOf(id);
+  if (idx >= 0) state.comparador.splice(idx, 1);
+  else if (state.comparador.length < 4) state.comparador.push(id);
+  render();
+}
+window.toggleComparador = toggleComparador;
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+function fmtBRL(v) {
+  if (v >= 1e9) return 'R$ ' + (v / 1e9).toFixed(2).replace('.', ',') + ' bi';
+  if (v >= 1e6) return 'R$ ' + (v / 1e6).toFixed(1).replace('.', ',') + ' mi';
+  if (v >= 1e3) return 'R$ ' + (v / 1e3).toFixed(0) + ' mil';
+  return 'R$ ' + v.toFixed(0);
+}
+function fmtNum(v) {
+  return v.toLocaleString('pt-BR');
+}
+function scoreColor(s) {
+  if (s >= 75) return 'text-emerald-600 bg-emerald-50';
+  if (s >= 55) return 'text-blue-600 bg-blue-50';
+  if (s >= 35) return 'text-amber-600 bg-amber-50';
+  return 'text-rose-600 bg-rose-50';
+}
+function scoreBarColor(s) {
+  if (s >= 75) return 'bg-emerald-500';
+  if (s >= 55) return 'bg-blue-500';
+  if (s >= 35) return 'bg-amber-500';
+  return 'bg-rose-500';
+}
+function capagColor(c) {
+  return { 'A':'bg-emerald-100 text-emerald-700', 'B':'bg-blue-100 text-blue-700', 'C':'bg-amber-100 text-amber-700', 'D':'bg-rose-100 text-rose-700' }[c];
+}
+
+// Normaliza string removendo acentos — "Guaíba" → "guaiba", "São Paulo" → "sao paulo"
+function normalizeStr(s) {
+  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+function applyFilters(list) {
+  const searchNorm = normalizeStr(state.filters.search);
+  return list.filter(m => {
+    if (state.filters.uf && m.uf !== state.filters.uf) return false;
+    if (state.filters.capag && m.capag !== state.filters.capag) return false;
+    if (state.filters.modelo && m.modelo_op !== state.filters.modelo) return false;
+    if (m.populacao < state.filters.popMin) return false;
+    if (m.pct_led > state.filters.ledMax) return false;
+    if (m.scores.geral < state.filters.scoreMin) return false;
+    if (searchNorm && !normalizeStr(m.nome).includes(searchNorm) && !m.uf.toLowerCase().includes(searchNorm)) return false;
+    if (state.filters.cosipStatus && m.cosip_status !== state.filters.cosipStatus) return false;
+    return true;
+  });
+}
+
+/* =========================================================
+   ÍCONES (SVG inline)
+   ========================================================= */
+const icon = {
+  search: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>',
+  home: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>',
+  list: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>',
+  scale: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/></svg>',
+  trend: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>',
+  bolt: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>',
+  money: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+  alert: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>',
+  city: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>',
+  doc: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+  plus: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>',
+  check: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>',
+  x: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>',
+  download: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>',
+};
+
+/* =========================================================
+   COMPONENTES UI
+   ========================================================= */
+
+function renderShell(content) {
+  const compCount = state.comparador.length;
+  return `
+  <div class="min-h-screen flex flex-col">
+    <!-- Top bar -->
+    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+      <div class="px-4 lg:px-8 h-16 flex items-center gap-4 max-w-[1600px] mx-auto">
+        <div data-route onclick="navigate('dashboard')" class="flex items-center gap-2 font-bold text-lg select-none">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </div>
+          <span class="hidden sm:block">Lumen<span class="text-indigo-600">IQ</span> <span class="text-xs font-normal text-slate-400 tracking-wider ml-0.5">Portal</span></span>
+        </div>
+
+        <nav class="hidden md:flex items-center gap-1 ml-6">
+          ${navItem('dashboard','Dashboard',icon.home)}
+          ${navItem('busca','Municípios',icon.list)}
+          ${navItem('comparador','Comparador',icon.scale)} ${compCount > 0 ? `<span class="ml-1 bg-indigo-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">${compCount}</span>` : ''}
+          ${navItem('scoring','Metodologia',icon.trend)}
+        </nav>
+
+        <div class="flex-1"></div>
+
+        <div class="relative hidden md:block">
+          <div class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">${icon.search}</div>
+          <input id="globalSearch" type="text" placeholder="Buscar município..." value="${state.filters.search}"
+            class="w-64 pl-10 pr-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            oninput="state.filters.search=this.value; state.page=0; if(state.route!=='busca') navigate('busca'); else render();">
+        </div>
+
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white text-sm font-semibold">BC</div>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="flex-1 fade-in">
+      <div class="max-w-[1600px] mx-auto px-4 lg:px-8 py-6 lg:py-8">
+        ${content}
+      </div>
+    </main>
+
+    <!-- Mobile bottom nav -->
+    <nav class="md:hidden sticky bottom-0 bg-white border-t border-slate-200 flex items-center justify-around py-2 z-30">
+      ${mobileNavItem('dashboard','Início',icon.home)}
+      ${mobileNavItem('busca','Buscar',icon.list)}
+      ${mobileNavItem('comparador','Comparar',icon.scale)}
+      ${mobileNavItem('scoring','Score',icon.trend)}
+    </nav>
+
+    <footer class="bg-slate-900 text-slate-400 text-xs py-4 px-8 text-center">
+      LumenIQ Portal • Infraestrutura · Iluminação Pública · Smart Cities · Energia • Dados ilustrativos para demonstração
+    </footer>
+  </div>`;
+}
+
+function navItem(route, label, ico) {
+  const active = state.route === route;
+  return `<a data-route onclick="navigate('${route}')" class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}">${ico}<span>${label}</span></a>`;
+}
+
+function mobileNavItem(route, label, ico) {
+  const active = state.route === route;
+  return `<a data-route onclick="navigate('${route}')" class="flex flex-col items-center gap-0.5 px-3 py-1 ${active ? 'text-indigo-600' : 'text-slate-500'}">${ico}<span class="text-[10px]">${label}</span></a>`;
+}
+
+/* =========================================================
+   VIEW: DASHBOARD
+   ========================================================= */
+
+function renderDashboard() {
+  const totalMercado = MUNICIPIOS.reduce((a,m)=>a+m.cosip_anual,0);
+  // Separar arrecadação real (SICONFI/TCE) da estimada
+  const reais        = MUNICIPIOS.filter(m=>m.cosip_status==='real');
+  const totalReal    = reais.reduce((a,m)=>a+m.cosip_anual,0);
+  const totalEstimado= totalMercado - totalReal;
+  const totalPontos = MUNICIPIOS.reduce((a,m)=>a+m.total_pontos,0);
+  const ledMedio = MUNICIPIOS.reduce((a,m)=>a+m.pct_led,0) / MUNICIPIOS.length;
+  const contratosVencendo = MUNICIPIOS.filter(m=>m.contrato_vence.startsWith('2026')||m.contrato_vence.startsWith('2027')).length;
+  const top10 = [...MUNICIPIOS].sort((a,b)=>b.scores.geral-a.scores.geral).slice(0,10);
+  const novasOportunidades = [...MUNICIPIOS].sort((a,b)=>b.scores.modernizacao-a.scores.modernizacao).slice(0,5);
+
+  // Regiões agregadas
+  const porRegiao = {};
+  MUNICIPIOS.forEach(m => {
+    porRegiao[m.regiao] = porRegiao[m.regiao] || { count:0, cosip:0, score:0 };
+    porRegiao[m.regiao].count++;
+    porRegiao[m.regiao].cosip += m.cosip_anual;
+    porRegiao[m.regiao].score += m.scores.geral;
+  });
+  Object.keys(porRegiao).forEach(k=>{ porRegiao[k].scoreMedio = porRegiao[k].score / porRegiao[k].count; });
+
+  const content = `
+  <div class="space-y-6">
+    <div class="flex items-end justify-between flex-wrap gap-3">
+      <div>
+        <h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Visão de Mercado</h1>
+        <p class="text-slate-500 text-sm mt-1">Inteligência consolidada do mercado brasileiro de COSIP & Iluminação Pública</p>
+      </div>
+      <div class="flex items-center gap-2 text-xs text-slate-500">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        Dados atualizados em ${new Date().toLocaleDateString('pt-BR')}
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      ${kpiCardCosip(totalReal, totalEstimado, reais.length, MUNICIPIOS.length)}
+      ${kpiCard('Pontos de IP Mapeados', fmtNum(totalPontos), '55 municípios cobertos', '', icon.bolt, 'indigo')}
+      ${kpiCard('% LED Médio', ledMedio.toFixed(1) + '%', 'potencial de modernização', '', icon.trend, 'violet')}
+      ${kpiCard('Contratos Vencendo', contratosVencendo + ' cidades', 'próximos 18 meses — oportunidade', '', icon.alert, 'rose')}
+    </div>
+
+    <!-- Charts row -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="bg-white rounded-xl border border-slate-200 p-5 lg:col-span-2">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-slate-900">Top 10 Municípios — Score Geral</h3>
+          <a data-route onclick="navigate('busca')" class="text-xs text-indigo-600 hover:underline">Ver todos →</a>
+        </div>
+        <div class="space-y-2.5">
+          ${top10.map((m,i)=>`
+            <div data-route onclick="navigate('perfil', ${m.id})" class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50">
+              <div class="text-xs font-bold w-6 text-center ${i<3 ? 'text-amber-600' : 'text-slate-400'}">${i+1}</div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-sm text-slate-900 truncate">${m.nome}</span>
+                  <span class="text-xs text-slate-500">${m.uf}</span>
+                  <span class="badge ${capagColor(m.capag)}">CAPAG ${m.capag}</span>
+                </div>
+                <div class="mt-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div class="h-full ${scoreBarColor(m.scores.geral)}" style="width:${m.scores.geral}%"></div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-slate-900">${m.scores.geral}</div>
+                <div class="text-[10px] text-slate-500">score</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-900 mb-1">Distribuição por Região</h3>
+        <p class="text-xs text-slate-400 mb-3">COSIP arrecadada por região</p>
+        <div class="h-48"><canvas id="chartRegiao"></canvas></div>
+        <div class="mt-4 space-y-2">
+          ${Object.entries(porRegiao).map(([reg,d])=>`
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-700">${reg}</span>
+              <div class="flex items-center gap-3">
+                <span class="font-semibold text-slate-900">${fmtBRL(d.cosip)}</span>
+                <span class="text-slate-400">${d.count} cidades</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Oportunidades -->
+    <div class="bg-gradient-to-br from-indigo-50 via-white to-violet-50 rounded-xl border border-indigo-100 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="font-semibold text-slate-900 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+            Oportunidades Emergentes — Maior Potencial de Modernização
+          </h3>
+          <p class="text-xs text-slate-500 mt-1">Municípios com baixo % LED, parque antigo e capacidade financeira</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        ${novasOportunidades.map(m=>`
+          <div data-route onclick="navigate('perfil', ${m.id})" class="bg-white rounded-lg p-4 border border-slate-100 hover:border-indigo-300 hover:shadow-md transition">
+            <div class="flex items-start justify-between">
+              <div class="font-semibold text-sm text-slate-900">${m.nome}</div>
+              <span class="badge ${capagColor(m.capag)}">${m.capag}</span>
+            </div>
+            <div class="text-xs text-slate-500 mt-0.5">${m.uf} • ${fmtNum(m.populacao)} hab.</div>
+            <div class="mt-3 flex items-baseline gap-1.5">
+              <span class="text-2xl font-bold text-indigo-600">${m.scores.modernizacao}</span>
+              <span class="text-xs text-slate-500">modernização</span>
+            </div>
+            <div class="mt-2 text-[11px] text-slate-600">${m.pct_led}% LED • ${m.idade_parque}a idade média</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+  </div>`;
+
+  // Render chart depois que DOM estiver pronto
+  setTimeout(() => {
+    const ctx = document.getElementById('chartRegiao');
+    if (!ctx) return;
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(porRegiao),
+        datasets: [{
+          data: Object.values(porRegiao).map(r => r.cosip),
+          backgroundColor: ['#6366f1','#8b5cf6','#10b981','#f59e0b','#ef4444'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        cutout: '65%'
+      }
+    });
+  }, 30);
+
+  return content;
+}
+
+function kpiCard(label, _ignore, value, sub, ico, color) {
+  const colors = {
+    emerald: 'from-emerald-500 to-emerald-600',
+    indigo: 'from-indigo-500 to-indigo-600',
+    violet: 'from-violet-500 to-violet-600',
+    rose: 'from-rose-500 to-rose-600',
+  };
+  return `
+    <div class="kpi-card bg-white rounded-xl border border-slate-200 p-5">
+      <div class="flex items-start justify-between">
+        <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">${label}</div>
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br ${colors[color]} text-white flex items-center justify-center">${ico}</div>
+      </div>
+      <div class="text-2xl lg:text-3xl font-bold mt-3 text-slate-900">${value}</div>
+      ${sub ? `<div class="text-xs text-slate-500 mt-1">${sub}</div>` : ''}
+    </div>`;
+}
+
+// Card especial para COSIP — destaca real vs estimado + contagem de municípios validados
+function kpiCardCosip(real, estimado, nReal, nTotal) {
+  const pct = nTotal ? Math.round(nReal / nTotal * 100) : 0;
+  return `
+    <div class="kpi-card bg-white rounded-xl border border-slate-200 p-5">
+      <div class="flex items-start justify-between">
+        <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">Mercado COSIP Anual</div>
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center">${icon.money}</div>
+      </div>
+      <div class="text-2xl lg:text-3xl font-bold mt-3 text-slate-900">${fmtBRL(real + estimado)}</div>
+      <div class="mt-2 space-y-1">
+        <div class="flex items-center justify-between text-xs">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+            <span class="text-slate-600">Confirmado</span>
+          </span>
+          <span class="font-semibold text-emerald-700">${fmtBRL(real)}</span>
+        </div>
+        <div class="flex items-center justify-between text-xs">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-slate-300 inline-block"></span>
+            <span class="text-slate-500">Estimado</span>
+          </span>
+          <span class="text-slate-400">${fmtBRL(estimado)}</span>
+        </div>
+      </div>
+      <div class="mt-2.5 pt-2 border-t border-slate-100 text-xs text-slate-400">
+        <span class="font-semibold text-slate-600">${fmtNum(nReal)}</span> municípios validados
+        <span class="text-slate-300 mx-1">•</span>${pct}% da base
+      </div>
+    </div>`;
+}
+
+/* =========================================================
+   VIEW: BUSCA / LISTAGEM
+   ========================================================= */
+
+function renderBusca() {
+  const filtered = applyFilters(MUNICIPIOS);
+  const sorted = [...filtered].sort((a,b) => b.scores.geral - a.scores.geral);
+  const UFs = [...new Set(MUNICIPIOS.map(m=>m.uf))].sort();
+
+  // Paginação
+  const totalPages = Math.max(1, Math.ceil(sorted.length / state.pageSize));
+  if (state.page >= totalPages) state.page = totalPages - 1;
+  if (state.page < 0) state.page = 0;
+  const startIdx = state.page * state.pageSize;
+  const endIdx = Math.min(startIdx + state.pageSize, sorted.length);
+  const pageItems = sorted.slice(startIdx, endIdx);
+
+  const content = `
+  <div class="space-y-5">
+    <div>
+      <h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Municípios</h1>
+      <p class="text-slate-500 text-sm mt-1">${fmtNum(filtered.length)} de ${fmtNum(MUNICIPIOS.length)} municípios — exibindo ${sorted.length===0?0:startIdx+1}–${endIdx}</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[280px,1fr] gap-5">
+
+      <!-- Filtros -->
+      <aside class="bg-white border border-slate-200 rounded-xl p-5 h-fit lg:sticky lg:top-20">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-slate-900">Filtros</h3>
+          <button onclick="state.filters={uf:'',capag:'',modelo:'',popMin:0,ledMax:100,scoreMin:0,search:'',cosipStatus:''}; state.page=0; render();" class="text-xs text-indigo-600 hover:underline">Limpar</button>
+        </div>
+        <div class="space-y-4 text-sm">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Origem dos dados</label>
+            <select id="filterCosipStatus" onchange="state.filters.cosipStatus=this.value; state.page=0; render();" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm">
+              <option value="">Todos</option>
+              <option value="real" ${state.filters.cosipStatus==='real'?'selected':''}>Só com dados oficiais (REAL)</option>
+              <option value="sem_publicado" ${state.filters.cosipStatus==='sem_publicado'?'selected':''}>Sem declaração SICONFI (N/D)</option>
+              <option value="sem_coleta" ${state.filters.cosipStatus==='sem_coleta'?'selected':''}>Estimativas (não coletados)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Estado</label>
+            <select id="filterUF" onchange="state.filters.uf=this.value; state.page=0; render();" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm">
+              <option value="">Todos</option>
+              ${UFs.map(u => `<option value="${u}" ${state.filters.uf===u?'selected':''}>${u}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">CAPAG</label>
+            <div class="flex gap-1">
+              ${CAPAGS.map(c => `<button onclick="state.filters.capag=state.filters.capag==='${c}'?'':'${c}'; render();" class="flex-1 py-1.5 rounded text-xs font-medium border ${state.filters.capag===c?'bg-indigo-600 text-white border-indigo-600':'border-slate-200 text-slate-600 hover:border-slate-300'}">${c}</button>`).join('')}
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Modelo Operacional</label>
+            <select id="filterModelo" onchange="state.filters.modelo=this.value; state.page=0; render();" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm">
+              <option value="">Todos</option>
+              ${MODELOS.map(m => `<option value="${m}" ${state.filters.modelo===m?'selected':''}>${m}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">População mínima: ${fmtNum(state.filters.popMin)}</label>
+            <input id="filterPopMin" type="range" min="0" max="2000000" step="50000" value="${state.filters.popMin}" oninput="state.filters.popMin=+this.value; state.page=0; render();" class="w-full accent-indigo-600">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">% LED máximo: ${state.filters.ledMax}%</label>
+            <input id="filterLedMax" type="range" min="0" max="100" value="${state.filters.ledMax}" oninput="state.filters.ledMax=+this.value; state.page=0; render();" class="w-full accent-indigo-600">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Score geral mínimo: ${state.filters.scoreMin}</label>
+            <input id="filterScoreMin" type="range" min="0" max="100" value="${state.filters.scoreMin}" oninput="state.filters.scoreMin=+this.value; state.page=0; render();" class="w-full accent-indigo-600">
+          </div>
+        </div>
+      </aside>
+
+      <!-- Lista -->
+      <div class="space-y-2">
+        ${sorted.length === 0 ? `
+          <div class="bg-white border border-slate-200 rounded-xl p-10 text-center">
+            <div class="text-slate-400 text-sm">Nenhum município encontrado com esses filtros</div>
+          </div>
+        ` : pageItems.map(m => municipioCard(m)).join('')}
+
+        ${sorted.length > state.pageSize ? renderPaginacao(state.page, totalPages, sorted.length) : ''}
+      </div>
+
+    </div>
+  </div>`;
+  return content;
+}
+
+function renderPaginacao(page, totalPages, totalItems) {
+  // Janela de páginas: mostra até 5 ao redor da atual
+  const win = 2;
+  const start = Math.max(0, page - win);
+  const end = Math.min(totalPages - 1, page + win);
+  let pages = [];
+  for (let i = start; i <= end; i++) pages.push(i);
+
+  return `
+    <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3 mt-4">
+      <div class="text-xs text-slate-500">
+        Página <span class="font-semibold text-slate-900">${page + 1}</span> de ${fmtNum(totalPages)} • ${fmtNum(totalItems)} resultados
+      </div>
+      <div class="flex items-center gap-1">
+        <button onclick="state.page=0; render();" ${page===0?'disabled':''}
+          class="px-2 py-1.5 rounded text-sm border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed">«</button>
+        <button onclick="state.page=Math.max(0,state.page-1); render();" ${page===0?'disabled':''}
+          class="px-3 py-1.5 rounded text-sm border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed">‹ Anterior</button>
+        ${start > 0 ? '<span class="px-1 text-slate-400">…</span>' : ''}
+        ${pages.map(p => `
+          <button onclick="state.page=${p}; render();"
+            class="px-3 py-1.5 rounded text-sm ${p===page ? 'bg-indigo-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'}">${p+1}</button>
+        `).join('')}
+        ${end < totalPages - 1 ? '<span class="px-1 text-slate-400">…</span>' : ''}
+        <button onclick="state.page=Math.min(${totalPages-1},state.page+1); render();" ${page===totalPages-1?'disabled':''}
+          class="px-3 py-1.5 rounded text-sm border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed">Próxima ›</button>
+        <button onclick="state.page=${totalPages-1}; render();" ${page===totalPages-1?'disabled':''}
+          class="px-2 py-1.5 rounded text-sm border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed">»</button>
+      </div>
+    </div>`;
+}
+
+function municipioCard(m) {
+  const noComp = state.comparador.includes(m.id);
+  return `
+  <div class="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-md transition flex items-center gap-4">
+    <div data-route onclick="navigate('perfil', ${m.id})" class="flex-1 min-w-0 cursor-pointer">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h3 class="font-semibold text-slate-900">${m.nome}</h3>
+        <span class="text-xs text-slate-500">${m.uf} • ${m.regiao}</span>
+        ${m.cosip_status === 'real'
+          ? '<span class="badge bg-emerald-100 text-emerald-700" title="COSIP via dados oficiais SICONFI">COSIP REAL</span>'
+          : m.cosip_status === 'sem_publicado'
+            ? '<span class="badge bg-slate-100 text-slate-600" title="Município não declarou COSIP no SICONFI">N/D</span>'
+            : '<span class="badge bg-amber-100 text-amber-700" title="Dados estimados — município não coletado">EST.</span>'}
+        <span class="badge ${capagColor(m.capag)}">CAPAG ${m.capag}</span>
+        ${m.telegestao ? '<span class="badge bg-indigo-100 text-indigo-700">Telegestão</span>' : ''}
+        ${m.consorcio ? '<span class="badge bg-violet-100 text-violet-700">Consórcio</span>' : ''}
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3 text-xs">
+        <div>
+          <div class="text-slate-500">População</div>
+          <div class="font-semibold text-slate-900 mt-0.5">${fmtNum(m.populacao)}</div>
+        </div>
+        <div>
+          <div class="text-slate-500">COSIP/ano</div>
+          <div class="font-semibold text-slate-900 mt-0.5">${fmtBRL(m.cosip_anual)}</div>
+        </div>
+        <div>
+          <div class="text-slate-500">Pontos IP</div>
+          <div class="font-semibold text-slate-900 mt-0.5">${fmtNum(m.total_pontos)}</div>
+        </div>
+        <div>
+          <div class="text-slate-500">% LED</div>
+          <div class="font-semibold text-slate-900 mt-0.5">${m.pct_led}%</div>
+        </div>
+        <div>
+          <div class="text-slate-500">Modelo</div>
+          <div class="font-semibold text-slate-900 mt-0.5 truncate">${m.modelo_op}</div>
+        </div>
+      </div>
+    </div>
+    <div class="flex flex-col items-center gap-2">
+      <div class="w-14 h-14 rounded-xl ${scoreColor(m.scores.geral)} flex items-center justify-center">
+        <span class="text-xl font-bold">${m.scores.geral}</span>
+      </div>
+      <button onclick="toggleComparador(${m.id})" class="text-xs font-medium px-2 py-1 rounded ${noComp?'bg-indigo-600 text-white':'border border-slate-200 text-slate-600 hover:border-indigo-400'}">${noComp?'✓ No comparador':'+ Comparar'}</button>
+    </div>
+  </div>`;
+}
+
+/* =========================================================
+   VIEW: PERFIL DO MUNICÍPIO
+   ========================================================= */
+
+function renderPerfil() {
+  const m = MUNICIPIOS.find(x => x.id === state.routeParam);
+  if (!m) return '<div>Município não encontrado</div>';
+
+  const economiaPotencial = Math.round(m.despesa_energia * 0.55 * (1 - m.pct_led/100));
+  const investimentoLed = Math.round((m.total_pontos * (1 - m.pct_led/100)) * 850);
+  const payback = investimentoLed > 0 && economiaPotencial > 0 ? (investimentoLed / economiaPotencial).toFixed(1) : '—';
+  const noComp = state.comparador.includes(m.id);
+
+  const content = `
+  <div class="space-y-6">
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-2 text-sm text-slate-500">
+      <a data-route onclick="navigate('busca')" class="hover:text-indigo-600">Municípios</a>
+      <span>›</span>
+      <span class="text-slate-700">${m.nome}</span>
+    </div>
+
+    ${renderBannerStatusDados(m)}
+
+    <!-- Header -->
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+      <div class="flex flex-col lg:flex-row gap-6">
+        <div class="flex-1">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h1 class="text-3xl font-bold text-slate-900">${m.nome}</h1>
+            <span class="text-lg text-slate-500">${m.uf}</span>
+            <span class="badge ${capagColor(m.capag)}">CAPAG ${m.capag}</span>
+            ${m.telegestao ? '<span class="badge bg-indigo-100 text-indigo-700">Possui Telegestão</span>' : ''}
+            ${m.consorcio ? '<span class="badge bg-violet-100 text-violet-700">Participa de Consórcio</span>' : ''}
+          </div>
+          <div class="text-sm text-slate-500 mt-1">IBGE ${m.ibge} • ${m.regiao} • ${fmtNum(m.populacao)} habitantes</div>
+
+          <!-- Resumo executivo IA -->
+          <div class="mt-5 p-4 rounded-lg bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100">
+            <div class="flex items-center gap-2 text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              Resumo Executivo • Gerado por IA
+            </div>
+            <p class="text-sm text-slate-700 leading-relaxed">
+              Município de <strong>${fmtNum(m.populacao)} habitantes</strong> na região ${m.regiao}, com CAPAG <strong>${m.capag}</strong> e arrecadação de COSIP de <strong>${fmtBRL(m.cosip_anual)}/ano</strong> (${m.cosip_crescimento >= 0 ? 'crescimento' : 'queda'} de <strong>${Math.abs(m.cosip_crescimento)}%</strong> a.a.).
+              Parque com <strong>${fmtNum(m.total_pontos)} pontos</strong>, sendo <strong>${m.pct_led}%</strong> em LED — ${m.pct_led < 50 ? 'alto potencial de modernização' : 'parque parcialmente modernizado'}.
+              Modelo operacional: <strong>${m.modelo_op}</strong>${m.modelo_op !== 'Operação Direta' ? ` operado por ${m.operadora}` : ''}, com contrato vencendo em <strong>${new Date(m.contrato_vence).toLocaleDateString('pt-BR')}</strong>.
+              ${m.scores.atratividade >= 70 ? 'Atratividade comercial alta.' : m.scores.atratividade >= 50 ? 'Atratividade comercial moderada.' : 'Atratividade comercial limitada — avaliar caso a caso.'}
+            </p>
+          </div>
+        </div>
+
+        <!-- Score box -->
+        <div class="lg:w-72 flex flex-col gap-2">
+          <div class="bg-gradient-to-br ${m.scores.geral >= 75 ? 'from-emerald-500 to-emerald-700' : m.scores.geral >= 55 ? 'from-blue-500 to-blue-700' : m.scores.geral >= 35 ? 'from-amber-500 to-amber-700' : 'from-rose-500 to-rose-700'} text-white rounded-xl p-5">
+            <div class="text-xs uppercase tracking-wide opacity-80">Score Geral</div>
+            <div class="text-5xl font-bold mt-1">${m.scores.geral}</div>
+            <div class="text-xs opacity-80 mt-1">de 100 pontos</div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="toggleComparador(${m.id})" class="py-2 px-3 rounded-lg text-sm font-medium ${noComp?'bg-indigo-600 text-white':'border border-slate-200 text-slate-700 hover:border-indigo-400'}">${noComp?'✓ Comparando':'+ Comparar'}</button>
+            <button class="py-2 px-3 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:border-slate-300 flex items-center justify-center gap-1">${icon.download} Exportar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scores detalhados -->
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+      <h3 class="font-semibold text-slate-900 mb-4">Scoring Detalhado</h3>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="space-y-3">
+          ${scoreRow('Atratividade Comercial', m.scores.atratividade)}
+          ${scoreRow('Potencial de Modernização', m.scores.modernizacao)}
+          ${scoreRow('Capacidade Financeira', m.scores.financeira)}
+          ${scoreRow('Risco de Inadimplência (inverso)', m.scores.risco)}
+          ${scoreRow('Viabilidade PPP', m.scores.ppp)}
+          ${scoreRow('Viabilidade ESCO', m.scores.esco)}
+          ${scoreRow('Maturidade Smart City', m.scores.smartcity)}
+        </div>
+        <div>
+          <div class="h-64"><canvas id="chartRadar"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid de dados -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- Finanças -->
+      <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 class="font-semibold text-slate-900 mb-4 flex items-center gap-2">${icon.money} Finanças</h3>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          ${dataRow('PIB per capita','R$ ' + fmtNum(m.pib_per_capita))}
+          ${dataRow('CAPAG', `<span class="badge ${capagColor(m.capag)}">${m.capag}</span>`)}
+          ${dataRow('COSIP arrecadado/ano' + cosipStatusBadge(m.cosip_status), cosipValorComStatus(m))}
+          ${dataRow('Crescimento COSIP a.a.' + (m.cosip_crescimento_fonte === 'CAGR SICONFI' ? ` <span class="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium">REAL</span>` : ` <span class="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded font-medium">EST.</span>`), (m.cosip_crescimento >= 0 ? '+' : '') + m.cosip_crescimento + '%')}
+          ${dataRow('Inadimplência estimada', m.inadimplencia + '%')}
+          ${dataRow('Despesa energia IP/ano', fmtBRL(m.despesa_energia))}
+          ${dataRow('Suficiência da CIP', m.cosip_anual >= m.despesa_energia ? '<span class="text-emerald-600 font-semibold">Suficiente</span>' : '<span class="text-rose-600 font-semibold">Insuficiente</span>')}
+          ${dataRow('Saldo COSIP-Despesa', fmtBRL(m.cosip_anual - m.despesa_energia))}
+        </div>
+        <div class="mt-5 h-40"><canvas id="chartFin"></canvas></div>
+      </div>
+
+      <!-- Parque IP -->
+      <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 class="font-semibold text-slate-900 mb-4 flex items-center gap-2">${icon.bolt} Parque de Iluminação Pública</h3>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          ${dataRow('Total de pontos', fmtNum(m.total_pontos))}
+          ${dataRow('Pontos LED', fmtNum(Math.round(m.total_pontos * m.pct_led / 100)) + ` (${m.pct_led}%)`)}
+          ${dataRow('Pontos não-LED', fmtNum(Math.round(m.total_pontos * (1 - m.pct_led/100))))}
+          ${dataRow('Idade média do parque', m.idade_parque + ' anos')}
+          ${dataRow('Potência média', m.potencia_media + ' W')}
+          ${dataRow('Potência instalada', fmtNum(Math.round(m.total_pontos * m.potencia_media / 1000)) + ' kW')}
+          ${dataRow('Telegestão', m.telegestao ? '<span class="text-emerald-600 font-semibold">Sim</span>' : '<span class="text-slate-500">Não</span>')}
+          ${dataRow('Tipo acionamento', m.telegestao ? 'Telegestão' : 'Fotocélula/Relé')}
+        </div>
+        <div class="mt-5 h-40"><canvas id="chartParque"></canvas></div>
+      </div>
+
+      <!-- Contrato -->
+      <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 class="font-semibold text-slate-900 mb-4 flex items-center gap-2">${icon.doc} Contrato Vigente</h3>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          ${dataRow('Modalidade', m.modelo_op)}
+          ${dataRow('Operadora', m.operadora)}
+          ${dataRow('Vencimento', new Date(m.contrato_vence).toLocaleDateString('pt-BR'))}
+          ${dataRow('Status', '<span class="text-emerald-600 font-semibold">Vigente</span>')}
+          ${dataRow('Consórcio regional', m.consorcio ? 'Sim' : 'Não')}
+          ${dataRow('Próx. licitação prevista', new Date(new Date(m.contrato_vence).getTime() - 1000*60*60*24*180).toLocaleDateString('pt-BR'))}
+        </div>
+        <div class="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
+          <strong>📅 Janela de oportunidade:</strong> contrato vence em ${Math.max(0, Math.round((new Date(m.contrato_vence) - new Date()) / (1000*60*60*24*30)))} meses. Início recomendado de prospecção: ${Math.max(0, Math.round((new Date(m.contrato_vence) - new Date()) / (1000*60*60*24*30)) - 18)} meses antes.
+        </div>
+      </div>
+
+      <!-- Modernização & Financiamento -->
+      <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 class="font-semibold text-slate-900 mb-4 flex items-center gap-2">${icon.trend} Modernização & Financiamento</h3>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          ${dataRow('Economia anual potencial', fmtBRL(economiaPotencial))}
+          ${dataRow('Investimento estimado', fmtBRL(investimentoLed))}
+          ${dataRow('Payback simples', payback + ' anos')}
+          ${dataRow('Pontos para troca', fmtNum(Math.round(m.total_pontos * (1 - m.pct_led/100))))}
+        </div>
+        <div class="mt-4">
+          <div class="text-xs font-medium text-slate-700 mb-2">Programas / Financiamentos identificados</div>
+          <div class="flex gap-1.5 flex-wrap">
+            ${m.programas.length > 0
+              ? m.programas.map(p => `<span class="badge bg-violet-100 text-violet-700">${p}</span>`).join('')
+              : '<span class="text-xs text-slate-400">Nenhum programa identificado nos últimos 24 meses</span>'}
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Documentos (mock) -->
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+      <h3 class="font-semibold text-slate-900 mb-4 flex items-center gap-2">${icon.doc} Documentos & Fontes</h3>
+      <div class="space-y-2">
+        ${docRow('Edital Concorrência ' + (2023 + Math.floor(m.id % 3)) + '/' + (1 + m.id % 99), 'Edital de licitação para serviços de IP', 'PDF • 142 páginas • Extraído por IA')}
+        ${docRow('Balanço Anual ' + (new Date().getFullYear()-1), 'Demonstrativo financeiro consolidado', 'PDF • 86 páginas • Fonte: SICONFI')}
+        ${docRow('Lei Municipal COSIP nº ' + (1000 + m.id), 'Instituição e regulamentação da contribuição', 'PDF • Fonte: Portal Transparência')}
+        ${docRow('Contrato vigente IP', 'Operação ' + m.modelo_op + ' — ' + m.operadora, 'PDF • Fonte: Diário Oficial')}
+      </div>
+    </div>
+
+  </div>`;
+
+  setTimeout(() => {
+    const r = document.getElementById('chartRadar');
+    if (r) new Chart(r, {
+      type: 'radar',
+      data: {
+        labels: ['Atrativ.','Modern.','Financ.','Risco','PPP','ESCO','Smart'],
+        datasets: [{
+          label: m.nome,
+          data: [m.scores.atratividade,m.scores.modernizacao,m.scores.financeira,m.scores.risco,m.scores.ppp,m.scores.esco,m.scores.smartcity],
+          backgroundColor: 'rgba(99,102,241,0.2)',
+          borderColor: '#6366f1',
+          pointBackgroundColor: '#6366f1'
+        }]
+      },
+      options: {
+        scales: { r: { suggestedMin: 0, suggestedMax: 100 } },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    const f = document.getElementById('chartFin');
+    if (f) {
+      let years, data, fonteLabel;
+      if (m.cosip_historico && Object.keys(m.cosip_historico).length > 0) {
+        // Histórico REAL do SICONFI/TCE-SP
+        years = Object.keys(m.cosip_historico).map(Number).sort();
+        data = years.map(y => m.cosip_historico[y].valor);
+        fonteLabel = 'COSIP arrecadada (real)';
+      } else {
+        // Heurística: estima 5 anos para trás a partir do valor base
+        years = [2021,2022,2023,2024,2025];
+        data = years.map((y,i) => Math.round(m.cosip_anual * Math.pow(1 + m.cosip_crescimento/100, i-4)));
+        fonteLabel = 'COSIP (estimado)';
+      }
+      new Chart(f, {
+        type: 'bar',
+        data: { labels: years, datasets: [{ label: fonteLabel, data, backgroundColor:'#6366f1' }] },
+        options: {
+          plugins:{ legend:{display:true, position:'bottom', labels:{font:{size:10}}} },
+          scales:{ y:{ ticks:{ callback:v=>'R$'+(v/1e6).toFixed(1)+'M' }}}
+        }
+      });
+    }
+
+    const p = document.getElementById('chartParque');
+    if (p) {
+      new Chart(p, {
+        type: 'doughnut',
+        data: {
+          labels: ['LED','Vapor Sódio','Vapor Metálico','Outros'],
+          datasets: [{
+            data: [m.pct_led, Math.max(0,(100-m.pct_led)*0.55), Math.max(0,(100-m.pct_led)*0.30), Math.max(0,(100-m.pct_led)*0.15)],
+            backgroundColor: ['#10b981','#f59e0b','#8b5cf6','#94a3b8']
+          }]
+        },
+        options: { plugins:{legend:{position:'right',labels:{font:{size:11}}}}, cutout:'60%' }
+      });
+    }
+  }, 30);
+
+  return content;
+}
+
+function renderBannerStatusDados(m) {
+  if (m.cosip_status === 'real') {
+    const n_anos = m.cosip_historico ? Object.keys(m.cosip_historico).length : 0;
+    return `
+      <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-start gap-3 text-sm">
+        <div class="text-emerald-600 mt-0.5">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="flex-1">
+          <div class="font-semibold text-emerald-900">Dados oficiais coletados</div>
+          <div class="text-emerald-700 text-xs mt-0.5">
+            COSIP via SICONFI — ${n_anos} ano(s) de histórico (cód. contábil <code class="bg-white px-1 rounded">ContribuicaoDeIluminacaoPublica</code>).
+            Demais campos (parque IP, contratos, scoring) ainda são estimativas — em desenvolvimento.
+          </div>
+        </div>
+      </div>`;
+  }
+  if (m.cosip_status === 'sem_publicado') {
+    return `
+      <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-start gap-3 text-sm">
+        <div class="text-slate-500 mt-0.5">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="flex-1">
+          <div class="font-semibold text-slate-900">COSIP não declarada no SICONFI</div>
+          <div class="text-slate-600 text-xs mt-0.5">
+            O município foi consultado mas o SICONFI não retornou a conta <code class="bg-white px-1 rounded">ContribuicaoDeIluminacaoPublica</code> em nenhum ano consultado.
+            Possíveis causas: município realmente não arrecada COSIP, classificou em outra conta, ou ainda não publicou o RREO.
+            Verifique no portal de transparência do município.
+          </div>
+        </div>
+      </div>`;
+  }
+  if (m.cosip_status === 'erro_coleta') {
+    return `
+      <div class="bg-rose-50 border border-rose-200 rounded-lg p-3 flex items-start gap-3 text-sm">
+        <div class="text-rose-500 mt-0.5">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        </div>
+        <div class="flex-1">
+          <div class="font-semibold text-rose-900">Falha técnica na coleta</div>
+          <div class="text-rose-700 text-xs mt-0.5">
+            Houve erro de comunicação com a API SICONFI. Rode o coletor novamente para tentar novamente.
+          </div>
+        </div>
+      </div>`;
+  }
+  // sem_coleta
+  return `
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-3 text-sm">
+      <div class="text-amber-600 mt-0.5">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+      </div>
+      <div class="flex-1">
+        <div class="font-semibold text-amber-900">Município ainda não coletado — dados são estimativas</div>
+        <div class="text-amber-700 text-xs mt-0.5">
+          Este município não está na lista de coleta. Todos os valores financeiros mostrados são <strong>estimativas heurísticas</strong> baseadas em população e PIB.
+          Para puxar dados oficiais, adicione o código IBGE <code class="bg-white px-1 rounded">${m.ibge}</code> ao arquivo <code class="bg-white px-1 rounded">coletor/municipios_alvo.csv</code> e rode o coletor.
+        </div>
+      </div>
+    </div>`;
+}
+
+function cosipStatusBadge(status) {
+  const badges = {
+    'real': ' <span class="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium">REAL</span>',
+    'sem_publicado': ' <span class="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded font-medium">N/D</span>',
+    'erro_coleta': ' <span class="text-[10px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded font-medium">ERRO</span>',
+    'sem_coleta': ' <span class="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded font-medium">EST.</span>'
+  };
+  return badges[status] || '';
+}
+
+function cosipValorComStatus(m) {
+  if (m.cosip_status === 'real') {
+    return fmtBRL(m.cosip_anual) + (m.cosip_anual_ano ? ` <span class="text-xs text-slate-500">(${m.cosip_anual_ano})</span>` : '');
+  }
+  if (m.cosip_status === 'sem_publicado') {
+    return '<span class="text-slate-500 text-sm">Sem declaração no SICONFI</span>';
+  }
+  if (m.cosip_status === 'erro_coleta') {
+    return '<span class="text-rose-600 text-sm">Falha na coleta — refazer</span>';
+  }
+  // sem_coleta - mostra estimativa porém deixa claro
+  return `<span class="text-amber-700">${fmtBRL(m.cosip_anual)}</span> <span class="text-xs text-slate-500">estimado</span>`;
+}
+
+function scoreRow(label, val) {
+  return `
+    <div>
+      <div class="flex justify-between items-center text-sm mb-1">
+        <span class="text-slate-700">${label}</span>
+        <span class="font-bold ${scoreColor(val).split(' ')[0]}">${val}</span>
+      </div>
+      <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+        <div class="h-full ${scoreBarColor(val)}" style="width:${val}%"></div>
+      </div>
+    </div>`;
+}
+
+function dataRow(label, val) {
+  return `<div><div class="text-xs text-slate-500">${label}</div><div class="font-semibold text-slate-900 mt-0.5">${val}</div></div>`;
+}
+
+function docRow(title, desc, meta) {
+  return `
+    <div class="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 cursor-pointer">
+      <div class="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">${icon.doc}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-medium text-sm text-slate-900">${title}</div>
+        <div class="text-xs text-slate-500">${desc}</div>
+      </div>
+      <div class="text-xs text-slate-400 hidden sm:block">${meta}</div>
+      <button class="text-indigo-600 text-sm hover:underline">Ver</button>
+    </div>`;
+}
+
+/* =========================================================
+   VIEW: COMPARADOR
+   ========================================================= */
+
+function renderComparador() {
+  const mun = state.comparador.map(id => MUNICIPIOS.find(m=>m.id===id)).filter(Boolean);
+
+  if (mun.length === 0) {
+    return `
+    <div class="space-y-5">
+      <h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Comparador</h1>
+      <div class="bg-white border border-dashed border-slate-300 rounded-xl p-12 text-center">
+        <div class="text-slate-400 mb-3 flex justify-center">${icon.scale}</div>
+        <h3 class="text-slate-900 font-semibold">Nenhum município selecionado</h3>
+        <p class="text-sm text-slate-500 mt-1 mb-4">Adicione até 4 municípios para comparar lado a lado.</p>
+        <button data-route onclick="navigate('busca')" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium">Buscar municípios →</button>
+      </div>
+    </div>`;
+  }
+
+  const linhas = [
+    ['População', m => fmtNum(m.populacao)],
+    ['PIB per capita', m => 'R$ ' + fmtNum(m.pib_per_capita)],
+    ['CAPAG', m => `<span class="badge ${capagColor(m.capag)}">${m.capag}</span>`],
+    ['COSIP anual', m => fmtBRL(m.cosip_anual)],
+    ['Crescimento COSIP', m => (m.cosip_crescimento>=0?'+':'') + m.cosip_crescimento + '%'],
+    ['Despesa energia/ano', m => fmtBRL(m.despesa_energia)],
+    ['Saldo CIP', m => fmtBRL(m.cosip_anual - m.despesa_energia)],
+    ['Total pontos IP', m => fmtNum(m.total_pontos)],
+    ['% LED', m => m.pct_led + '%'],
+    ['Idade média parque', m => m.idade_parque + ' anos'],
+    ['Telegestão', m => m.telegestao?'<span class="text-emerald-600 font-semibold">Sim</span>':'<span class="text-slate-400">Não</span>'],
+    ['Modelo operacional', m => m.modelo_op],
+    ['Operadora', m => m.operadora],
+    ['Vencimento contrato', m => new Date(m.contrato_vence).toLocaleDateString('pt-BR')],
+    ['Consórcio', m => m.consorcio?'Sim':'Não'],
+    ['Programas', m => m.programas.length ? m.programas.join(', ') : '—'],
+  ];
+
+  const scores = [
+    ['Score Geral', 'geral'],
+    ['Atratividade Comercial','atratividade'],
+    ['Potencial Modernização','modernizacao'],
+    ['Capacidade Financeira','financeira'],
+    ['Risco Inadimplência','risco'],
+    ['Viabilidade PPP','ppp'],
+    ['Viabilidade ESCO','esco'],
+    ['Maturidade Smart City','smartcity'],
+  ];
+
+  const content = `
+  <div class="space-y-5">
+    <div class="flex items-center justify-between flex-wrap gap-3">
+      <div>
+        <h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Comparador</h1>
+        <p class="text-slate-500 text-sm mt-1">${mun.length} de até 4 municípios</p>
+      </div>
+      <button data-route onclick="navigate('busca')" class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium">+ Adicionar</button>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+      <div class="h-72"><canvas id="chartCompRadar"></canvas></div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200">
+          <tr>
+            <th class="text-left p-3 font-semibold text-slate-700 w-48">Indicador</th>
+            ${mun.map(m => `
+              <th class="text-left p-3 font-semibold text-slate-900">
+                <div class="flex items-center justify-between gap-2">
+                  <div>
+                    <div>${m.nome}</div>
+                    <div class="text-xs text-slate-500 font-normal">${m.uf}</div>
+                  </div>
+                  <button onclick="toggleComparador(${m.id})" class="text-slate-400 hover:text-rose-600 ml-2">${icon.x}</button>
+                </div>
+              </th>
+            `).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="bg-indigo-50/40">
+            <td colspan="${mun.length+1}" class="px-3 py-2 text-xs font-semibold text-indigo-900 uppercase tracking-wide">Dados gerais</td>
+          </tr>
+          ${linhas.map((l,i) => `
+            <tr class="border-b border-slate-100 ${i%2===0?'':'bg-slate-50/40'}">
+              <td class="p-3 text-slate-600">${l[0]}</td>
+              ${mun.map(m => `<td class="p-3 text-slate-900">${l[1](m)}</td>`).join('')}
+            </tr>
+          `).join('')}
+          <tr class="bg-indigo-50/40">
+            <td colspan="${mun.length+1}" class="px-3 py-2 text-xs font-semibold text-indigo-900 uppercase tracking-wide">Scoring</td>
+          </tr>
+          ${scores.map((s,i) => `
+            <tr class="border-b border-slate-100 ${i%2===0?'':'bg-slate-50/40'}">
+              <td class="p-3 text-slate-600">${s[0]}</td>
+              ${mun.map(m => `<td class="p-3"><span class="font-bold ${scoreColor(m.scores[s[1]]).split(' ')[0]}">${m.scores[s[1]]}</span></td>`).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+
+  setTimeout(() => {
+    const c = document.getElementById('chartCompRadar');
+    if (!c) return;
+    const colors = ['#6366f1','#10b981','#f59e0b','#ef4444'];
+    new Chart(c, {
+      type: 'radar',
+      data: {
+        labels: ['Atrativ.','Modern.','Financ.','Risco','PPP','ESCO','Smart'],
+        datasets: mun.map((m,i) => ({
+          label: m.nome,
+          data: [m.scores.atratividade,m.scores.modernizacao,m.scores.financeira,m.scores.risco,m.scores.ppp,m.scores.esco,m.scores.smartcity],
+          backgroundColor: colors[i] + '33',
+          borderColor: colors[i],
+          pointBackgroundColor: colors[i],
+        }))
+      },
+      options: { scales: { r:{ suggestedMin: 0, suggestedMax: 100 }} }
+    });
+  }, 30);
+
+  return content;
+}
+
+/* =========================================================
+   VIEW: SCORING (METODOLOGIA)
+   ========================================================= */
+
+function renderScoring() {
+  return `
+  <div class="space-y-6 max-w-4xl">
+    <div>
+      <h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Metodologia de Scoring</h1>
+      <p class="text-slate-500 text-sm mt-1">Como calculamos cada score do município</p>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+      <h3 class="font-semibold text-slate-900 mb-4">Os 7 Scores</h3>
+      <div class="space-y-4 text-sm">
+        ${scoringExplain('Score Geral','Score consolidado, média ponderada dos demais. Indicador único de prioridade comercial.','bg-indigo-100 text-indigo-700')}
+        ${scoringExplain('Atratividade Comercial','Combina porte, COSIP, CAPAG, idade do parque e janela contratual. Mede o quão atraente é o município para originação.','bg-emerald-100 text-emerald-700')}
+        ${scoringExplain('Potencial de Modernização','Alto quando % LED é baixo, idade do parque é alta e há espaço para economia energética significativa.','bg-blue-100 text-blue-700')}
+        ${scoringExplain('Capacidade Financeira','Baseado em CAPAG, RCL per capita, dependência de transferências e endividamento.','bg-violet-100 text-violet-700')}
+        ${scoringExplain('Risco de Inadimplência','Estima risco de pagamentos atrasados com base em histórico CIP, capacidade financeira e tendências.','bg-amber-100 text-amber-700')}
+        ${scoringExplain('Viabilidade PPP','Considera porte mínimo (>50k hab.), suficiência da CIP, CAPAG A/B e número de pontos suficiente para escala.','bg-rose-100 text-rose-700')}
+        ${scoringExplain('Viabilidade ESCO','Foco em garantia de fluxo (CIP suficiente) e potencial de economia mensurável e contratualizável.','bg-cyan-100 text-cyan-700')}
+        ${scoringExplain('Maturidade Smart City','Participação em programas, telegestão, consórcio regional, projetos digitais paralelos.','bg-fuchsia-100 text-fuchsia-700')}
+      </div>
+    </div>
+
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-900">
+      <strong>⚠️ Protótipo:</strong> os scores deste sketch são calculados com dados ilustrativos. A versão de produção utilizará dados reais do SICONFI, Tesouro, IBGE, ANEEL, PNCP e portais de transparência municipais, atualizados mensalmente.
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+      <h3 class="font-semibold text-slate-900 mb-2">Distribuição de scores na base</h3>
+      <p class="text-xs text-slate-500 mb-4">${MUNICIPIOS.length} 
