@@ -271,7 +271,7 @@ function capagColor(c) {
 
 // Normaliza string removendo acentos — "Guaíba" → "guaiba", "São Paulo" → "sao paulo"
 function normalizeStr(s) {
-  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
 function applyFilters(list) {
